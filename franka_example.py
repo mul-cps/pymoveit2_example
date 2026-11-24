@@ -4,22 +4,38 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from pymoveit2 import MoveIt2
+from pymoveit2.robot_description import RobotDescription
 
 from franka_msgs.action import Grasp, Move
 from franka_msgs.msg import GraspEpsilon
+
+from get_parameter import node_get_parameter_str
 
 
 class FrankaMove:
     def __init__(self, node) -> None:
         self.node = node
 
+        # get URDF and SRDF
+        urdf_xml = node_get_parameter_str(
+            node=self.node,
+            executor=self.node.executor,
+            node_name="/robot_state_publisher",
+            parameter_name="robot_description",
+        )
+        srdf_xml = node_get_parameter_str(
+            node=self.node,
+            executor=self.node.executor,
+            node_name="/move_group",
+            parameter_name="robot_description_semantic",
+        )
+
+        self._description = RobotDescription(urdf_xml = urdf_xml, srdf_xml = srdf_xml)
+
         self.moveit2 = MoveIt2(
             node=self.node,
-            joint_names=[ "panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7",],
-            base_link_name="panda_link0",
-            end_effector_name="panda_hand_tcp",
-            group_name="panda_arm", # tip: panda_link8
             use_move_group_action = True,
+            **self._description.moveit2_kwargs(group_name="panda_arm"),
         )
 
         # reduce speed and acceleration
