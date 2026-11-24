@@ -142,12 +142,33 @@ def main():
         # ---- 1. Move to a named configuration from the description ----
         node.move_to_state("ready")
 
-        # ---- 2. Move the end-effector to a Cartesian pose ----
-        #   (frame defaults to the group's base link)
-        node.move_to_pose(
-            position=[0.0, 0.205, 0.285],
-            quat_xyzw=[1.0, 0.0, 0.0, 0.0],   # pointing down
-        )
+        # $ ros2 run tf2_ros tf2_echo base_link tool0
+        # - Translation: [-0.131, 0.205, 0.285]
+        # - Rotation: in Quaternion (xyzw) [1.000, -0.000, 0.000, 0.001]
+        # - Rotation: in RPY (radian) [3.141, -0.000, -0.000]
+        # - Rotation: in RPY (degree) [179.938, -0.017, -0.021]
+        # - Matrix:
+        #   1.000 -0.000  0.000 -0.131
+        #  -0.000 -1.000 -0.001  0.205
+        #   0.000  0.001 -1.000  0.285
+        #   0.000  0.000  0.000  1.000
+
+        # ---- 2. Trace a four-corner diamond, beginning at the ready/bottom pose ----
+        # Keep the existing Cartesian target as the bottom vertex. The diamond
+        # is traced in the XY plane, then the end-effector returns to the bottom.
+        bottom = [0.0, 0.205, 0.285]
+        diamond_points = [
+            bottom,
+            [0.05, 0.205, 0.335],   # right
+            [0.0, 0.205, 0.385],    # top
+            [-0.05, 0.205, 0.335],  # left
+            bottom,                 # close the diamond
+        ]
+        for point in diamond_points:
+            node.move_to_pose(
+                position=point,
+                quat_xyzw=[1.0, 0.0, 0.0, 0.0],  # pointing down
+            )
 
         # ---- 3. Return to the named 'ready' state ----
         node.move_to_state("ready")
