@@ -9,6 +9,8 @@ from typing import Optional
 from pymoveit2 import MoveIt2
 from pymoveit2.robot_description import RobotDescription
 
+from get_parameter import node_get_parameter_str
+
 
 class RobotMove(Node):
     def __init__(self):
@@ -20,10 +22,19 @@ class RobotMove(Node):
 
     # ----------------------------------------------------------
     def setup(self, group_name: Optional[str] = None):
-        self._description = RobotDescription.from_node(
-            self,
-            callback_group=self._callback_group,
+        # get URDF and SRDF
+        urdf_xml = node_get_parameter_str(
+            node=self,
+            node_name="/robot_state_publisher",
+            parameter_name="robot_description",
         )
+        srdf_xml = node_get_parameter_str(
+            node=self,
+            node_name="/move_group",
+            parameter_name="robot_description_semantic",
+        )
+
+        self._description = RobotDescription(urdf_xml = urdf_xml, srdf_xml = srdf_xml)
 
         self.moveit2 = MoveIt2(
             node=self,
