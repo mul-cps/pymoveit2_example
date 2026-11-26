@@ -87,10 +87,6 @@ class RobotMove(Node):
         # Keep the group's joint order; default any missing joint to 0.0.
         return [state.get(j, 0.0) for j in joint_names]
 
-    def base_link_name(self, group_name: Optional[str] = None) -> str:
-        group_name = group_name or self._group_name
-        return self._description.groups[group_name].base_link_name
-
     # ----------------------------------------------------------
     def move_to_state(self, state_name: str):
         """Plan and execute a joint-space goal referenced by its SRDF name."""
@@ -104,20 +100,18 @@ class RobotMove(Node):
         self.get_logger().info("Joint goal reached.")
 
     # ----------------------------------------------------------
-    def move_to_pose(self, position, quat_xyzw, frame_id=None):
+    def move_to_pose(self, position, quat_xyzw):
         """
         Plan and execute a Cartesian pose goal.
         position   : [x, y, z] in meters
         quat_xyzw  : [x, y, z, w] orientation quaternion
         """
-        frame_id = frame_id or self.base_link_name()
         self.get_logger().info(
-            f"Moving to pose: pos={position}, quat={quat_xyzw}, frame={frame_id}"
+            f"Moving to pose: pos={position}, quat={quat_xyzw}"
         )
         self.moveit2.move_to_pose(
             position=position,
             quat_xyzw=quat_xyzw,
-            frame_id=frame_id,
         )
         self.moveit2.wait_until_executed()
         self.get_logger().info("Pose goal reached.")
