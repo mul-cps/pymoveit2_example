@@ -3,7 +3,10 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from threading import Thread
+from rclpy.action import ActionClient
+from action_msgs.msg import GoalStatus
+from control_msgs.action import GripperCommand
+from threading import Event, Thread
 from typing import Optional
 
 from pymoveit2 import MoveIt2
@@ -19,6 +22,12 @@ class RobotMove(Node):
         self._description: Optional[RobotDescription] = None
         self.moveit2: Optional[MoveIt2] = None
         self._group_name: Optional[str] = None
+        self._gripper_client = ActionClient(
+            self, GripperCommand,
+            "/robotiq_urcap_adapter/gripper_command",
+        )
+        self.gripper_width = 0.085  # fully open width in meters
+        self.gripper_force = 50.0  # maximum closing effort in newtons
 
     # ----------------------------------------------------------
     def setup(self, group_name: Optional[str] = None):
@@ -116,6 +125,46 @@ class RobotMove(Node):
         self.moveit2.wait_until_executed()
         self.get_logger().info("Pose goal reached.")
 
+    def _gripper_command(self, position, max_effort):
+        if not self._gripper_client.server_is_ready():
+            self.get_logger().error("gripper command action server unavailable")
+            return False
+
+        goal = GripperCommand.Goal()
+        goal.command.position = position
+        goal.command.max_effort = max_effort
+
+        # def wait_for_future(future):
+        #     done = Event()
+        #     future.add_done_callback(lambda _: done.set())
+        #     done.wait()
+        #     return future.result()
+
+        try:
+            goal_future = self._gripper_client.send_goal_async(goal)
+            # goal_handle = wait_for_future(goal_future)
+            self.executor.spin_until_future_complete(goal_future)
+            if not goal_handle.accepted:
+                self.get_logger().error("gripper command rejected")
+                return False
+            result_future = goal_handle.get_result_async()
+            # result = wait_for_future(result_future)
+            self.executor.spin_until_future_complete(result_future)
+            return result.status == GoalStatus.STATUS_SUCCEEDED
+        except Exception as exc:
+            self.get_logger().error(f"gripper command failed: {exc}")
+            return False
+
+    def open(self):
+        success = self._gripper_command(self.gripper_width, self.gripper_force)
+        self.get_logger().info(f"gripper opened: {success}")
+        return success
+
+    def close(self):
+        success = self._gripper_command(0.0, self.gripper_force)
+        self.get_logger().info(f"gripper closed: {success}")
+        return success
+
 
 def main():
     rclpy.init()
@@ -135,6 +184,8 @@ def main():
     try:
         # ---- 1. Move to a named configuration from the description ----
         node.move_to_state("ready")
+
+        node.open()
 
         # $ ros2 run tf2_ros tf2_echo base_link tool0
         # - Translation: [-0.131, 0.205, 0.285]
@@ -163,6 +214,8 @@ def main():
                 position=point,
                 quat_xyzw=[1.0, 0.0, 0.0, 0.0],  # pointing down
             )
+
+        node.close()
 
         # ---- 3. Return to the named 'ready' state ----
         node.move_to_state("ready")
